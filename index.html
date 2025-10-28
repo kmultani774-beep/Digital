@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fevicol — Book Creator</title>
+    <link rel="icon" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="100%" height="100%" fill="%232563eb"/><text x="50%" y="54%" font-size="30" font-family="Arial, Helvetica, sans-serif" fill="white" text-anchor="middle" alignment-baseline="middle">F</text></svg>'>
+    <!-- React + ReactDOM UMD -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <!-- Babel for JSX in-browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- html2canvas and jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root{ --bg:#f4f6f8; --panel:#ffffff; --muted:#6b7280; --accent:#0f62fe; --card-shadow: 0 6px 20px rgba(12,18,36,0.06); }
+      *{box-sizing:border-box}
+      body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; margin:0; background:var(--bg); color:#111; padding:20px;}
+      .shell{max-width:1200px; margin:0 auto; display:grid; grid-template-columns: 360px 1fr; gap:18px; align-items:start;}
+      .panel{background:var(--panel); border-radius:12px; padding:16px; box-shadow:var(--card-shadow);}
+      h1{margin:0 0 6px 0; font-size:20px;}
+      h2{margin:0 0 12px 0; font-size:16px;}
+      label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px;}
+      input[type="text"], select, textarea{width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef; font-size:14px;}
+      .row{display:flex; gap:8px; align-items:center;}
+      .btn{display:inline-flex; gap:8px; align-items:center; padding:8px 12px; border-radius:8px; cursor:pointer; background:var(--accent); color:white; border:none; font-weight:600;}
+      .btn.ghost{background:transparent; color:#111; border:1px solid #e6e9ef;}
+      .small{padding:6px 8px; border-radius:8px; font-size:13px;}
+      .muted{color:var(--muted); font-size:13px;}
+      .themes-grid{display:grid; grid-template-columns: repeat(1,1fr); gap:10px; margin-top:10px; max-height:300px; overflow:auto;}
+      .theme-card{display:flex; gap:10px; align-items:center; padding:10px; border-radius:10px; cursor:pointer; border:1px solid transparent;}
+      .theme-card.selected{box-shadow:0 4px 12px rgba(12,18,36,0.06); border-color:#e9f2ff; transform:translateY(-2px);}
+      .swatch{width:64px; height:48px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:rgba(0,0,0,0.65); font-weight:700; font-size:12px;}
+      .meta-list{margin-top:12px;}
+      .pages-list{margin-top:12px; max-height:220px; overflow:auto; display:flex; flex-direction:column; gap:8px;}
+      .page-item{display:flex; align-items:center; justify-content:space-between; padding:8px; border-radius:8px; border:1px solid transparent;}
+      .page-item.selected{background:#fbfcff; border-color:#e6eefc;}
+      .page-preview{height:740px; overflow:auto; padding:14px; border-radius:10px; border:1px solid #e8eef8; background:linear-gradient(0deg, #fff, #fff);}
+      .page-canvas{width:210mm; max-width:100%; min-height:297mm; margin:0 auto; box-shadow:0 10px 30px rgba(12,18,36,0.04); border-radius:10px; padding:28px; box-sizing:border-box;}
+      .controls{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+      .theme-header{display:flex; justify-content:space-between; align-items:center;}
+      .flex{display:flex; gap:8px; align-items:center;}
+      .tiny{font-size:12px; padding:6px 8px; border-radius:8px;}
+      @media (max-width:980px){.shell{grid-template-columns:1fr} .page-preview{height:560px}}
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="panel" aria-label="controls">
+        <div class="theme-header">
+          <div>
+            <h1>Fevicol — Book Creator</h1>
+            <div class="muted">Professional themes — apply to current page or set as default for new pages</div>
+          </div>
+          <div class="flex">
+            <button id="exportPdf" class="btn">Export PDF</button>
+          </div>
+        </div>
+
+        <section style="margin-top:12px;">
+          <h2>Themes (click to preview & apply)</h2>
+          <div class="muted">Click a theme to select it. Use <strong>Apply to page</strong> or <strong>Set for new pages</strong>.</div>
+          <div id="themes" class="themes-grid" role="list"></div>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button id="applyThemeBtn" class="small btn ghost">Apply to selected page</button>
+            <button id="setDefaultBtn" class="small btn">Set as default for new pages</button>
+          </div>
+        </section>
+
+        <section style="margin-top:14px;">
+          <h2>Book Settings</h2>
+          <label>Title</label>
+          <input id="bookTitle" type="text" placeholder="My Book" />
+          <label style="margin-top:8px">Author</label>
+          <input id="bookAuthor" type="text" placeholder="Author name" />
+
+          <div class="meta-list">
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button id="addPageBtn" class="small btn">+ Add Page</button>
+              <button id="resetBtn" class="small btn ghost">Reset</button>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+              <label class="muted">Orientation</label>
+              <select id="orientation" class="tiny">
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+              <button id="downloadHtml" class="tiny btn ghost">Download HTML</button>
+              <button id="exportJson" class="tiny btn ghost">Export JSON</button>
+              <label style="margin-left:6px;" class="muted tiny">Import JSON <input id="importJson" type="file" accept="application/json" style="display:none" /></label>
+            </div>
+          </div>
+        </section>
+
+        <section style="margin-top:14px;">
+          <h2>Pages</h2>
+          <div id="pages" class="pages-list" role="list"></div>
+        </section>
+      </aside>
+
+      <main class="panel" aria-label="editor">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+          <div>
+            <h2>Editor — Live Preview</h2>
+            <div class="muted">Select a page on the left, then edit content and styling here.</div>
+          </div>
+          <div class="flex">
+            <button id="applyToSelected" class="tiny btn ghost">Apply Theme to Selected</button>
+            <button id="setForNew" class="tiny btn">Set Theme for New Pages</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px; display:grid; grid-template-columns: 320px 1fr; gap:12px;">
+          <div>
+            <div class="panel" style="padding:12px;">
+              <h3>Selected Page</h3>
+              <label>Title</label>
+              <input id="pageTitle" type="text" />
+              <label style="margin-top:8px">Background Color</label>
+              <div class="row">
+                <input id="pageBg" type="color" style="width:46px; height:36px; border-radius:8px; border:none" />
+                <input id="pageBgText" type="text" class="tiny" />
+              </div>
+
+              <label style="margin-top:8px">Border Style</label>
+              <div class="row" style="margin-top:6px;">
+                <select id="pageBorderStyle" class="tiny">
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                  <option value="double">Double</option>
+                </select>
+                <input id="pageBorderColor" type="color" style="width:46px; height:36px; border-radius:8px; border:none" />
+              </div>
+
+              <label style="margin-top:8px">Content</label>
+              <textarea id="pageContent" rows="10" style="width:100%;"></textarea>
+
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <button id="updatePage" class="small btn">Save</button>
+                <button id="deletePage" class="small btn ghost">Delete</button>
+                <button id="duplicatePage" class="small btn ghost">Duplicate</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="page-preview panel" id="previewArea"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+      const { jsPDF } = window.jspdf;
+
+      const THEMES = [
+        { name:"Gold", bg:"#D4AF37", borderStyle:"solid", borderColor:"#b38827", textColor:"#111" },
+        { name:"Pink", bg:"#F472B6", borderStyle:"solid", borderColor:"#d45b97", textColor:"#111" },
+        { name:"Sky Blue", bg:"#60A5FA", borderStyle:"solid", borderColor:"#2c7be5", textColor:"#fff" },
+        { name:"Lavender", bg:"#C7B2FF", borderStyle:"solid", borderColor:"#9b7bff", textColor:"#111" },
+        { name:"Emerald", bg:"#10B981", borderStyle:"solid", borderColor:"#0e9a6d", textColor:"#fff" },
+        { name:"Rose", bg:"#FB7185", borderStyle:"solid", borderColor:"#f43f5e", textColor:"#fff" },
+        { name:"Mint", bg:"#86EFAC", borderStyle:"solid", borderColor:"#5ee08b", textColor:"#111" },
+        { name:"Slate", bg:"#64748B", borderStyle:"solid", borderColor:"#475568", textColor:"#fff" },
+        { name:"Coral", bg:"#FB923C", borderStyle:"solid", borderColor:"#f97316", textColor:"#111" },
+        { name:"Teal", bg:"#14B8A6", borderStyle:"solid", borderColor:"#0ea89a", textColor:"#fff" },
+        { name:"Indigo", bg:"#6366F1", borderStyle:"solid", borderColor:"#4f46e5", textColor:"#fff" },
+        { name:"Amber", bg:"#F59E0B", borderStyle:"solid", borderColor:"#d97706", textColor:"#111" },
+        { name:"Crimson", bg:"#DC2626", borderStyle:"solid", borderColor:"#b91c1c", textColor:"#fff" },
+        { name:"Olive", bg:"#84CC16", borderStyle:"solid", borderColor:"#6aa40f", textColor:"#111" },
+        { name:"Sky", bg:"#7DD3FC", borderStyle:"solid", borderColor:"#38bdf8", textColor:"#111" },
+        { name:"Peach", bg:"#FDBA74", borderStyle:"solid", borderColor:"#fb923c", textColor:"#111" },
+        { name:"Plum", bg:"#8B5CF6", borderStyle:"solid", borderColor:"#7c3aed", textColor:"#fff" },
+        { name:"Navy", bg:"#1E3A8A", borderStyle:"solid", borderColor:"#16286f", textColor:"#fff" },
+        { name:"Sand", bg:"#F3E8D9", borderStyle:"solid", borderColor:"#e5d6c0", textColor:"#111" },
+        { name:"Cream", bg:"#FFF7ED", borderStyle:"solid", borderColor:"#ffe8c2", textColor:"#111" },
+      ];
+
+      function uid(){ return Math.random().toString(36).slice(2,9); }
+      function newPage(title="Page", theme=null){
+        const base = { id: uid(), title, content: "Write your content here...", bg:"#ffffff", borderStyle:"solid", borderColor:"#e5e7eb", isCover:false };
+        if(theme){
+          base.bg = theme.bg; base.borderStyle = theme.borderStyle; base.borderColor = theme.borderColor;
+        }
+        return base;
+      }
+
+      function App(){
+        const [bookMeta, setBookMeta] = useState({ title:"Fevicol Book", author:"Author", coverImage:"", coverTextColor:"#111" });
+        const [pages, setPages] = useState([ {...newPage("Cover", THEMES[0]), isCover:true, title:"Cover"} ]);
+        const [selected, setSelected] = useState(pages[0].id);
+        const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
+        const [defaultThemeIndex, setDefaultThemeIndex] = useState(0);
+        const [orientation, setOrientation] = useState("portrait");
+        const pageRefs = useRef({});
+
+        useEffect(()=>{
+            document.getElementById("bookTitle").value = bookMeta.title;
+            document.getElementById("bookAuthor").value = bookMeta.author;
+        },[bookMeta, orientation]);
+
+        useEffect(()=>{ renderThemes(); renderPagesList(); renderSelectedToControls(); renderPreview(); },[pages, selected, selectedThemeIndex, defaultThemeIndex, bookMeta, orientation]);
+
+        window.applyThemeToSelected = ()=> applyThemeToSelected();
+        window.setThemeForNewPages = ()=> setThemeForNewPages();
+        window.addPage = ()=> addPage();
+        window.downloadPDF = ()=> downloadPDF();
+        window.downloadHTML = ()=> downloadHTML();
+        window.downloadJSON = ()=> downloadJSON();
+        window.importJSON = ()=> document.getElementById("importJson").click();
+
+        function renderThemes(){
+          const container = document.getElementById("themes");
+          if(!container) return;
+          container.innerHTML = "";
+          THEMES.forEach((t,i)=>{
+            const card = document.createElement("div");
+            card.className = "theme-card " + (i===selectedThemeIndex ? "selected" : "");
+            card.onclick = ()=> setSelectedThemeIndex(i);
+            const sw = document.createElement("div");
+            sw.className = "swatch";
+            sw.style.background = t.bg;
+            sw.style.color = t.textColor || "#111";
+            sw.textContent = t.name;
+            const info = document.createElement("div");
+            info.style.flex = "1";
+            info.innerHTML = `<div style="font-weight:700">${t.name}</div><div class="muted" style="font-size:12px">bg: ${t.bg} • border: ${t.borderColor}</div>`;
+            card.appendChild(sw);
+            card.appendChild(info);
+            container.appendChild(card);
+          });
+        }
+
+        function renderPagesList(){
+          const list = document.getElementById("pages");
+          if(!list) return;
+          list.innerHTML = "";
+          pages.forEach((p,idx)=>{
+            const el = document.createElement("div");
+            el.className = "page-item " + (p.id===selected ? "selected" : "");
+            el.onclick = ()=> setSelected(p.id);
+            el.innerHTML = `<div style="flex:1"><div style="font-weight:700">${idx+1}. ${escapeHtml(p.title)}</div><div class="muted" style="font-size:12px">${p.isCover? "Cover" : "Page"}</div></div>
+              <div style="display:flex; gap:6px; align-items:center">
+                <button class="tiny" data-action="up">▲</button>
+                <button class="tiny" data-action="down">▼</button>
+                <button class="tiny" data-action="after">+After</button>
+                <button class="tiny" data-action="del">✕</button>
+              </div>`;
+            el.querySelectorAll("button").forEach(btn=>{
+              btn.addEventListener("click", (ev)=>{
+                ev.stopPropagation();
+                const a = btn.getAttribute("data-action");
+                if(a==="up") movePage(p.id, -1);
+                if(a==="down") movePage(p.id, 1);
+                if(a==="after") addBlankAfter(p.id);
+                if(a==="del") removePage(p.id);
+              });
+            });
+            list.appendChild(el);
+          });
+        }
+
+        function renderSelectedToControls(){
+          const pg = pages.find(x=>x.id===selected);
+          if(!pg) return;
+          document.getElementById("pageTitle").value = pg.title;
+          document.getElementById("pageBg").value = pg.bg;
+          document.getElementById("pageBgText").value = pg.bg;
+          document.getElementById("pageBorderStyle").value = pg.borderStyle;
+          document.getElementById("pageBorderColor").value = pg.borderColor;
+          document.getElementById("pageContent").value = pg.content;
+        }
+
+        function renderPreview(){
+          const area = document.getElementById("previewArea");
+          if(!area) return;
+          area.innerHTML = "";
+          pages.forEach((pg, idx)=>{
+            const el = document.createElement("div");
+            el.className = "page-canvas";
+            el.style.background = pg.isCover ? THEMES[defaultThemeIndex].bg : pg.bg;
+            el.style.color = pg.isCover ? THEMES[defaultThemeIndex].textColor || "#111" : "#111";
+            el.style.borderStyle = pg.borderStyle;
+            el.style.borderColor = pg.borderColor;
+            el.style.borderWidth = "6px";
+            el.style.minHeight = (orientation==="portrait" ? "297mm" : "210mm");
+            el.style.width = (orientation==="portrait" ? "210mm" : "297mm");
+            el.innerHTML = `<div style="display:flex; justify-content:space-between; margin-bottom:12px">
+              <div style="font-size:18px; font-weight:800">${pg.isCover ? escapeHtml(bookMeta.title) : escapeHtml(pg.title)}</div>
+              <div style="font-size:14px; color:#374151">${pg.isCover ? escapeHtml(bookMeta.author) : ""}</div>
+            </div>
+            <div style="white-space:pre-wrap; font-size:16px; line-height:1.7">${escapeHtml(pg.content)}</div>
+            <div style="margin-top:20px; text-align:center; color:var(--muted); font-size:13px">${idx+1}</div>`;
+            area.appendChild(el);
+            pageRefs.current[pg.id] = el;
+          });
+        }
+
+        function addPage(){
+          const theme = THEMES[defaultThemeIndex];
+          const p = newPage("Page " + (pages.length+1), theme);
+          setPages(prev => { const copy=[...prev,p]; setSelected(p.id); return copy; });
+        }
+        function addBlankAfter(id){
+          const theme = THEMES[defaultThemeIndex];
+          const p = newPage("Page " + (pages.length+1), theme);
+          setPages(prev=>{ const idx=prev.findIndex(x=>x.id===id); const copy=[...prev]; copy.splice(idx+1,0,p); setSelected(p.id); return copy; });
+        }
+        function updatePageFromControls(){
+          const pg = pages.find(x=>x.id===selected);
+          if(!pg) return alert("No page selected");
+          const title = document.getElementById("pageTitle").value;
+          const bg = document.getElementById("pageBg").value;
+          const borderStyle = document.getElementById("pageBorderStyle").value;
+          const borderColor = document.getElementById("pageBorderColor").value;
+          const content = document.getElementById("pageContent").value;
+          setPages(prev => prev.map(p => p.id===selected ? {...p, title, bg, borderStyle, borderColor, content} : p));
+        }
+        function removePage(id){
+          if(!confirm("Delete this page?")) return;
+          setPages(prev=>{ const copy = prev.filter(x=>x.id!==id); if(copy.length) setSelected(copy[0].id); return copy.length? copy : [{...newPage("Cover", THEMES[0]), isCover:true, title:"Cover"}]; });
+        }
+        function movePage(id, dir){
+          setPages(prev=>{ const idx=prev.findIndex(x=>x.id===id); if(idx===-1) return prev; const ni=idx+dir; if(ni<0||ni>=prev.length) return prev; const copy=[...prev]; const [it]=copy.splice(idx,1); copy.splice(ni,0,it); return copy; });
+        }
+        function duplicatePage(){
+          const pg = pages.find(x=>x.id===selected); if(!pg) return;
+          const copy = {...pg, id: uid(), title: pg.title + " (copy)"};
+          setPages(prev=>{ const idx=prev.findIndex(x=>x.id===selected); const cp = [...prev]; cp.splice(idx+1,0,copy); setSelected(copy.id); return cp; });
+        }
+
+        function applyThemeToSelected(){
+          const t = THEMES[selectedThemeIndex];
+          setPages(prev => prev.map(p => p.id===selected ? {...p, bg:t.bg, borderStyle:t.borderStyle, borderColor:t.borderColor} : p));
+        }
+        function setThemeForNewPages(){
+          setDefaultThemeIndex(selectedThemeIndex);
+          alert("Default theme set for new pages: " + THEMES[selectedThemeIndex].name);
+        }
+
+        async function downloadPDF(){
+          try{
+            const o = document.getElementById("orientation").value;
+            setOrientation(o);
+            await new Promise(r=>setTimeout(r,120));
+            const pdf = new jsPDF({ unit:"px", format:"a4", orientation: o });
+            const a4Width = pdf.internal.pageSize.getWidth();
+            const a4Height = pdf.internal.pageSize.getHeight();
+            for(let i=0;i<pages.length;i++){
+              const p = pages[i];
+              const node = pageRefs.current[p.id];
+              if(!node) continue;
+              const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: null, scrollY: -window.scrollY });
+              const imgData = canvas.toDataURL("image/png");
+              const imgW = a4Width;
+              const imgH = canvas.height * (a4Width / canvas.width);
+              if(i>0) pdf.addPage();
+              if(imgH > a4Height){
+                const fitW = canvas.width * (a4Height / canvas.height);
+                const drawW = fitW;
+                const drawH = a4Height;
+                const x = (a4Width - drawW)/2;
+                pdf.addImage(imgData, "PNG", x, 0, drawW, drawH);
+              } else {
+                pdf.addImage(imgData, "PNG", 0, 0, imgW, imgH);
+              }
+            }
+            const fname = (bookMeta.title || "book") + "_" + o + ".pdf";
+            pdf.save(fname);
+          }catch(err){
+            console.error(err);
+            alert("Error creating PDF: " + (err.message||err));
+          }
+        }
+        function downloadHTML(){ const html = buildHTML(); const blob=new Blob([html],{type:"text/html"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=(bookMeta.title||"book")+".html"; a.click(); URL.revokeObjectURL(url); }
+        function downloadJSON(){ const blob=new Blob([JSON.stringify({bookMeta,pages},null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=(bookMeta.title||"book")+".json"; a.click(); URL.revokeObjectURL(url); }
+        function importJSONFile(e){ const file = e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload = (ev)=>{ try{ const data=JSON.parse(ev.target.result); if(data.bookMeta) setBookMeta(data.bookMeta); if(Array.isArray(data.pages) && data.pages.length){ setPages(data.pages); setSelected(data.pages[0].id); } alert("Imported"); }catch(err){ alert("Invalid JSON: "+err.message);} }; reader.readAsText(file); }
+
+        document.getElementById("applyThemeBtn").onclick = applyThemeToSelected;
+        document.getElementById("setDefaultBtn").onclick = setThemeForNewPages;
+        document.getElementById("addPageBtn").onclick = addPage;
+        document.getElementById("resetBtn").onclick = ()=>{ if(confirm("Reset book?")){ setBookMeta({title:"Fevicol Book", author:"Author", coverImage:"", coverTextColor:"#111"}); setPages([{...newPage("Cover", THEMES[0]), isCover:true, title:"Cover"}]); setSelected(null); } };
+        document.getElementById("orientation").onchange = (e)=> setOrientation(e.target.value);
+        document.getElementById("downloadHtml").onclick = downloadHTML;
+        document.getElementById("exportJson").onclick = downloadJSON;
+        document.getElementById("importJson").onchange = importJSONFile;
+        document.getElementById("exportPdf").onclick = downloadPDF;
+        document.getElementById("applyToSelected").onclick = applyThemeToSelected;
+        document.getElementById("setForNew").onclick = setThemeForNewPages;
+        document.getElementById("pageBg").oninput = (e)=> document.getElementById("pageBgText").value = e.target.value;
+        document.getElementById("pageBgText").onchange = (e)=> document.getElementById("pageBg").value = e.target.value;
+        document.getElementById("updatePage").onclick = updatePageFromControls;
+        document.getElementById("deletePage").onclick = ()=> removePage(selected);
+        document.getElementById("duplicatePage").onclick = duplicatePage;
+        document.getElementById("bookTitle").onchange = (e)=> setBookMeta(prev=>({...prev, title:e.target.value}));
+        document.getElementById("bookAuthor").onchange = (e)=> setBookMeta(prev=>({...prev, author:e.target.value}));
+        document.getElementById("orientation").onchange = (e)=> setOrientation(e.target.value);
+
+        function buildHTML(){ const pagesHtml = pages.map(p=>`<section style="padding:40px; background:${p.bg}; border:8px ${p.borderStyle} ${p.borderColor}; margin-bottom:20px; border-radius:12px;"><h2>${escapeHtml(p.title)}</h2><div style="white-space:pre-wrap">${escapeHtml(p.content)}</div></section>`).join("\n"); return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(bookMeta.title)}</title></head><body><header style="padding:40px; background:${THEMES[defaultThemeIndex].bg}; color:${THEMES[defaultThemeIndex].textColor};"><h1>${escapeHtml(bookMeta.title)}</h1><h3>${escapeHtml(bookMeta.author)}</h3></header><main>${pagesHtml}</main></body></html>`; }
+        function escapeHtml(s=""){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
+
+        // minimal React-driven state setters (internal)
+        const [_, _setPages] = useState(pages);
+        const [__, _setSelected] = useState(selected);
+        const [___, _setBookMeta] = useState(bookMeta);
+        function setPages(v){ _setPages(v); pages = v; renderPagesList(); renderPreview(); renderSelectedToControls(); }
+        function setSelected(v){ _setSelected(v); selected = v; renderPagesList(); renderPreview(); renderSelectedToControls(); }
+        function setBookMeta(v){ _setBookMeta(v); bookMeta = v; renderPreview(); }
+
+        // initial render calls
+        renderThemes(); renderPagesList(); renderSelectedToControls(); renderPreview();
+
+        // expose debug handle
+        return { pages, bookMeta, selectedThemeIndex, defaultThemeIndex, orientation };
+      }
+
+      const appState = App();
+      window.BookCreator = appState;
+    </script>
+  </body>
+</html>
